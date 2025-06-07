@@ -1,0 +1,20 @@
+# macOS system files
+.DS_Store
+
+# VS Code project folder
+.vscode/
+
+# Build outputs and debug files
+app
+app.dSYM/
+
+# Temporary files
+*.log
+*.tmp
+
+# Optional: ignore .txt files (uncomment if needed)
+*.txt
+
+# Optional: ignore 3D model files (uncomment if needed)
+# *.obj
+
