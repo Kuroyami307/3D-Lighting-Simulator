@@ -36,6 +36,7 @@ class model{
     std::vector<float>vertexNormals;
     std::ifstream file;
     unsigned int VBO_position, VBO_normal, VAO, EBO;
+    // unsigned int VAO_flatShading, VBO_flatShadingPosition, VBO_flatShadingNormal;
 
     //std::vector<float>vertexTestures;
     public:
@@ -215,7 +216,7 @@ int main()
     glEnable(GL_DEPTH_TEST);
 
     //make shaderObject
-    shader ourShader("vShader.txt", "fShader.txt");
+    shader ourShader("vShader.vs", "fShader.fs");
 
     //define model objects;
 
@@ -223,7 +224,7 @@ int main()
     sphere.loadModel("horse.obj");
     sphere.calculateNormals();
 
-    light l1 = {glm::vec3(3,3,3), glm::vec4(1,1,1,1), 0.8};
+    light l1 = {glm::vec3(2,2,-2), glm::vec4(1,1,1,1), 0.8};
 
     glm::mat4 model         = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
     glm::mat4 view          = glm::mat4(1.0f);
@@ -295,6 +296,9 @@ int main()
 
         unsigned int lightPosLoc = glGetUniformLocation(ourShader.progID, "lightPosition");
         glUniform3f(lightPosLoc, l1.position.x, l1.position.y, l1.position.z);
+
+        unsigned int camPosLoc = glGetUniformLocation(ourShader.progID, "cameraPosition");
+        glUniform3f(camPosLoc, cameraPos.x, cameraPos.y, cameraPos.z);
 
         unsigned int lightLoc = glGetUniformLocation(ourShader.progID, "lightIntensity");
         glUniform1f(lightLoc, l1.intensity);
