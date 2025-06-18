@@ -7,12 +7,16 @@
 #include <sstream>
 #include <iostream>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>  // For transformations like translate, rotate, scale
+#include <glm/gtc/type_ptr.hpp>
+
 class shader
 {
     public:
     unsigned int progID; //program ID of the shader program
 
-    shader(const char* vertexPath, const char* fragmentPath)
+    void loadShaders(const char* vertexPath, const char* fragmentPath)
     {
         // 1. Retrieve the vertex/fragment source code from filePath
         std::string vertexCode;
@@ -109,6 +113,20 @@ class shader
         int uniformLoc;
         uniformLoc = glGetUniformLocation(progID, name.c_str()); 
         glUniform2f(uniformLoc, val1, val2); 
+    }
+
+    void setMat4(const std::string &name, glm::mat4 matrix) const
+    {
+        int uniformLoc;
+        uniformLoc = glGetUniformLocation(progID, name.c_str()); 
+        glUniformMatrix4fv(uniformLoc, 1, GL_FALSE, glm::value_ptr(matrix));
+    }
+
+    void setVec4(const std::string &name, glm::vec4 vec4D) const
+    {
+        int uniformLoc;
+        uniformLoc = glGetUniformLocation(progID, name.c_str()); 
+        glUniform4f(uniformLoc, vec4D.x, vec4D.y, vec4D.z, vec4D.w); 
     }
 };
 

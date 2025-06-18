@@ -1,4 +1,6 @@
-#version 330 core
+#version 300 es
+precision mediump float;
+
 in vec3 normal;
 in vec3 vertexPosition;
 
@@ -35,7 +37,7 @@ void main()
     {
         finalIntensity += 0.8 * lightIntensity * dot_NL;
         if(dot_RV > 0)
-            finalIntensity += 0.6 * lightIntensity * pow(dot_RV, 8);
+            finalIntensity += 1.0 * lightIntensity * pow(dot_RV, 24);
     }
 
     FragColor = vec4(ourColor * finalIntensity, 1.0f);

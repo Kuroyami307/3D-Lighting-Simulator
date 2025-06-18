@@ -12,8 +12,13 @@
 
 #include "shader.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#include <emscripten/html5.h> 
+#endif
+
 bool camRotation = false;
-glm::vec3 cameraPos(2.0f, 2.0f, 2.0f), targetPos(0.0f, 0.0f, 0.0f), cameraUp(0.0f, 1.0f, 0.0f);
+glm::vec3 cameraPos(3.0f, 3.0f, 3.0f), targetPos(0.0f, 0.0f, 0.0f), cameraUp(0.0f, 1.0f, 0.0f);
 
 float ambientLight = 0.1;
 
@@ -27,23 +32,36 @@ struct light{
     glm::vec3 position;
     glm::vec4 color;
     float intensity;
+    // float attenuation;
 };
 
 class model{
     private:
     std::vector<float>vertices;
+    // std::vector<float>flatVertices;
     std::vector<int>faces;
-    std::vector<float>vertexNormals;
+    // std::vector<float>vertexNormals;
+    int flatVerticesSize;
     std::ifstream file;
     unsigned int VBO_position, VBO_normal, VAO, EBO;
-    // unsigned int VAO_flatShading, VBO_flatShadingPosition, VBO_flatShadingNormal;
+    unsigned int VAO_Flat, VBO_FlatPosition, VBO_FlatShadingNormal;
+    bool flatShading;
 
     //std::vector<float>vertexTestures;
     public:
+    model()
+    {
+        flatShading = false;
+    }
+
     void loadModel(const std::string &name)
     {
+        std::vector<float> vertexNormals;
         std::string line;
         file.open(name.c_str());
+
+        vertices.clear();
+        vertexNormals.clear();
 
         if(file.is_open())
         {
@@ -54,9 +72,9 @@ class model{
                 {
                     float x, y, z;
                     sscanf(line.c_str(), "v %f %f %f", &x, &y, &z);
-                    vertices.push_back(x/2);
-                    vertices.push_back(y/2);
-                    vertices.push_back(z/2);
+                    vertices.push_back(x);
+                    vertices.push_back(y);
+                    vertices.push_back(z);
                 }
 
                 if(line[0] == 'f' && line[1] == ' ')
@@ -71,49 +89,6 @@ class model{
             }
         }
 
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO_position);
-        glGenBuffers(1, &EBO);
-        // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-        glBindVertexArray(VAO);
-
-        glBindBuffer(GL_ARRAY_BUFFER, VBO_position);
-        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, faces.size() * sizeof(int), faces.data(), GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-
-        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
-        glBindBuffer(GL_ARRAY_BUFFER, 0); 
-
-        // remember: do NOT unbind the EBO while a VAO is active as the bound element buffer object IS stored in the VAO; keep the EBO bound.
-        //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
-        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-        glBindVertexArray(0); 
-    }
-
-    void draw()
-    {
-        glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-        //glDrawArrays(GL_TRIANGLES, 0, 6);
-        glDrawElements(GL_TRIANGLES, faces.size(), GL_UNSIGNED_INT, 0);
-        // glBindVertexArray(0); // no need to unbind it every time 
-    }
-
-    ~model()
-    {
-        glDeleteVertexArrays(1, &VAO);
-        glDeleteBuffers(1, &VBO_position);
-        glDeleteBuffers(1, &EBO);
-    }
-
-    void calculateNormals()
-    {
         vertexNormals.resize(vertices.size(), 0.0f);
 
         for(int i = 0, size = faces.size()/3; i < size; i++)
@@ -154,11 +129,90 @@ class model{
             vertexNormals[i+2] = norm.z;
         }
 
-        glGenBuffers(1, &VBO_normal);
+        glBindBuffer(GL_ARRAY_BUFFER, 0); 
 
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO_position);
+        glGenBuffers(1, &VBO_normal);
+        glGenBuffers(1, &EBO);
+        // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
         glBindVertexArray(VAO);
 
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_position);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
         glBindBuffer(GL_ARRAY_BUFFER, VBO_normal);
+        glBufferData(GL_ARRAY_BUFFER, vertexNormals.size() * sizeof(float), vertexNormals.data(), GL_STATIC_DRAW);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, faces.size() * sizeof(int), faces.data(), GL_STATIC_DRAW);
+
+        // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+        glBindBuffer(GL_ARRAY_BUFFER, 0); 
+
+        // remember: do NOT unbind the EBO while a VAO is active as the bound element buffer object IS stored in the VAO; keep the EBO bound.
+        //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+        // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+        glBindVertexArray(0); 
+
+        //set up data for flat shading
+        // flatShading = true;
+        std::vector<float> flatVertices;
+        
+        flatVertices.clear();
+        int size = faces.size();
+        for(int i = 0; i < size; i++)
+        {
+            flatVertices.push_back(vertices[3 * faces[i] + 0]);
+            flatVertices.push_back(vertices[3 * faces[i] + 1]);
+            flatVertices.push_back(vertices[3 * faces[i] + 2]);
+        }
+    
+        vertexNormals.resize(flatVertices.size(), 0.0f);
+
+        for (int i = 0; i < flatVertices.size(); i += 9)
+        {
+            glm::vec3 v1(flatVertices[i + 0], flatVertices[i + 1], flatVertices[i + 2]);
+            glm::vec3 v2(flatVertices[i + 3], flatVertices[i + 4], flatVertices[i + 5]);
+            glm::vec3 v3(flatVertices[i + 6], flatVertices[i + 7], flatVertices[i + 8]);
+
+            glm::vec3 normal = glm::normalize(glm::cross(v2 - v1, v3 - v1));
+
+            vertexNormals[i + 0] = normal.x;
+            vertexNormals[i + 1] = normal.y;
+            vertexNormals[i + 2] = normal.z;
+
+            vertexNormals[i + 3] = normal.x;
+            vertexNormals[i + 4] = normal.y;
+            vertexNormals[i + 5] = normal.z;
+
+            vertexNormals[i + 6] = normal.x;
+            vertexNormals[i + 7] = normal.y;
+            vertexNormals[i + 8] = normal.z;
+        }
+
+        flatVerticesSize = flatVertices.size();
+
+        glGenVertexArrays(1, &VAO_Flat);
+        glGenBuffers(1, &VBO_FlatPosition);
+        glGenBuffers(1, &VBO_FlatShadingNormal);
+
+        // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+        glBindVertexArray(VAO_Flat);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_FlatPosition);
+        glBufferData(GL_ARRAY_BUFFER, flatVertices.size() * sizeof(float), flatVertices.data(), GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_FlatShadingNormal);
         glBufferData(GL_ARRAY_BUFFER, vertexNormals.size() * sizeof(float), vertexNormals.data(), GL_STATIC_DRAW);
 
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
@@ -166,12 +220,48 @@ class model{
 
         glBindBuffer(GL_ARRAY_BUFFER, 0); 
     }
+
+    void draw()
+    {
+        if(flatShading)
+        {
+            glBindVertexArray(VAO_Flat);
+            glDrawArrays(GL_TRIANGLES, 0, flatVerticesSize);
+        }
+        else
+        {
+            glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
+            glDrawElements(GL_TRIANGLES, faces.size(), GL_UNSIGNED_INT, 0);
+            // glBindVertexArray(0); // no need to unbind it every time 
+        }
+    }
+
+    ~model()
+    {
+        glDeleteVertexArrays(1, &VAO);
+        glDeleteBuffers(1, &VBO_position);
+        glDeleteBuffers(1, &EBO);
+        glDeleteBuffers(1, &VBO_normal);
+
+        glDeleteVertexArrays(1, &VAO_Flat);
+        glDeleteBuffers(1, &VBO_FlatPosition);
+        glDeleteBuffers(1, &VBO_FlatShadingNormal);
+    }
+
+    void setFlatShading(bool status)
+    {
+        flatShading = status;
+    }
+
+    bool getFlatShadingStatus()
+    {
+        return flatShading;
+    }
 };
 
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
-void randomFunc();
 
 // settings
 unsigned int SCR_WIDTH = 700;
@@ -182,9 +272,16 @@ int main()
     // glfw: initialize and configure
     // ------------------------------
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
+    #ifdef __EMSCRIPTEN__
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    #else
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    #endif
 
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -205,24 +302,36 @@ int main()
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    #ifdef __EMSCRIPTEN__
+    if (!gladLoadGLLoader((GLADloadproc)emscripten_webgl_get_proc_address))
     {
-        std::cout << "Failed to initialize GLAD" << std::endl;
+        std::cout << "Failed to initialize GLAD\n";
         return -1;
     }
+    #else
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        std::cout << "Failed to initialize GLAD\n";
+        return -1;
+    }
+    #endif
 
     // configure global opengl state
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
 
     //make shaderObject
-    shader ourShader("vShader.vs", "fShader.fs");
+    shader ourShader;
 
+    #ifdef __EMSCRIPTEN__
+        ourShader.loadShaders("Emiscripten/vShader.vs", "Emiscripten/fShader.fs");
+    #else
+        ourShader.loadShaders("Shaders/vs2.vs", "Shaders/fs2.fs");
+    #endif
     //define model objects;
 
     model sphere;
     sphere.loadModel("horse.obj");
-    sphere.calculateNormals();
 
     light l1 = {glm::vec3(2,2,-2), glm::vec4(1,1,1,1), 0.8};
 
@@ -263,8 +372,10 @@ int main()
         if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             translate += glm::vec3(0.05f, 0.0f, 0.0f);
 
-        if(glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-            std::cout << "E Down\n";
+        if(glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS)
+        {
+            sphere.setFlatShading(!sphere.getFlatShadingStatus());    
+        }
 
         cameraPos += translate;
         targetPos +=translate;
