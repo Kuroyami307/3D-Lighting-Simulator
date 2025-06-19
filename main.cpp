@@ -10,7 +10,7 @@
 #include <glm/gtc/matrix_transform.hpp>  // For transformations like translate, rotate, scale
 #include <glm/gtc/type_ptr.hpp>
 
-#include "shader.h"
+#include "custom/shader.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -35,7 +35,7 @@ struct light{
     // float attenuation;
 };
 
-class model{
+class object{
     private:
     std::vector<float>vertices;
     // std::vector<float>flatVertices;
@@ -49,7 +49,7 @@ class model{
 
     //std::vector<float>vertexTestures;
     public:
-    model()
+    object()
     {
         flatShading = false;
     }
@@ -226,7 +226,7 @@ class model{
         if(flatShading)
         {
             glBindVertexArray(VAO_Flat);
-            glDrawArrays(GL_TRIANGLES, 0, flatVerticesSize);
+            glDrawArrays(GL_TRIANGLES, 0, flatVerticesSize/3);
         }
         else
         {
@@ -236,7 +236,7 @@ class model{
         }
     }
 
-    ~model()
+    ~object()
     {
         glDeleteVertexArrays(1, &VAO);
         glDeleteBuffers(1, &VBO_position);
@@ -267,91 +267,20 @@ void processInput(GLFWwindow *window);
 unsigned int SCR_WIDTH = 700;
 unsigned int SCR_HEIGHT = 700;
 
-int main()
+GLFWwindow* window = nullptr;
+bool fPressed = false;
+
+shader ourShader;
+object sphere;
+
+light l1 = {glm::vec3(2,2,-2), glm::vec4(1,1,1,1), 0.8};
+
+glm::mat4 model         = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
+glm::mat4 view          = glm::mat4(1.0f);
+glm::mat4 projection    = glm::mat4(1.0f);
+
+void mainLoop()
 {
-    // glfw: initialize and configure
-    // ------------------------------
-    glfwInit();
-    
-    #ifdef __EMSCRIPTEN__
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    #else
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    #endif
-
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-
-    // glfw window creation
-    // --------------------
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
-    if (window == NULL)
-    {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetCursorPosCallback(window, cursor_position_callback);
-
-    // glad: load all OpenGL function pointers
-    // ---------------------------------------
-    #ifdef __EMSCRIPTEN__
-    if (!gladLoadGLLoader((GLADloadproc)emscripten_webgl_get_proc_address))
-    {
-        std::cout << "Failed to initialize GLAD\n";
-        return -1;
-    }
-    #else
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize GLAD\n";
-        return -1;
-    }
-    #endif
-
-    // configure global opengl state
-    // -----------------------------
-    glEnable(GL_DEPTH_TEST);
-
-    //make shaderObject
-    shader ourShader;
-
-    #ifdef __EMSCRIPTEN__
-        ourShader.loadShaders("Emiscripten/vShader.vs", "Emiscripten/fShader.fs");
-    #else
-        ourShader.loadShaders("Shaders/vs2.vs", "Shaders/fs2.fs");
-    #endif
-    //define model objects;
-
-    model sphere;
-    sphere.loadModel("horse.obj");
-
-    light l1 = {glm::vec3(2,2,-2), glm::vec4(1,1,1,1), 0.8};
-
-    glm::mat4 model         = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
-    glm::mat4 view          = glm::mat4(1.0f);
-    glm::mat4 projection    = glm::mat4(1.0f);
-    // model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
-    model  = glm::translate(model, glm::vec3(0.0f, -0.5f, 0.0f));
-    // view  = glm::lookAt(cameraPos, targetPos, cameraUp);
-    projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-
-    //camera stuffs
-    //glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
-    // uncomment this call to draw in wireframe polygons.
-    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    // render loop
-    // -----------
-    while (!glfwWindowShouldClose(window))
-    {
         // input
         // -----
         glfwPollEvents();
@@ -374,7 +303,13 @@ int main()
 
         if(glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS)
         {
+            fPressed = true;   
+        }
+
+        if(glfwGetKey(window, GLFW_KEY_F) == GLFW_RELEASE && fPressed)
+        {
             sphere.setFlatShading(!sphere.getFlatShadingStatus());    
+            fPressed = false;
         }
 
         cameraPos += translate;
@@ -424,7 +359,96 @@ int main()
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
+}
+
+int main()
+{
+    // glfw: initialize and configure
+    // ------------------------------
+    glfwInit();
+    
+    #ifdef __EMSCRIPTEN__
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    #else
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    #endif
+
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
+
+    // glfw window creation
+    // --------------------
+    window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    if (window == NULL)
+    {
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
     }
+    glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(window, cursor_position_callback);
+
+    // glad: load all OpenGL function pointers
+    // ---------------------------------------
+    #ifdef __EMSCRIPTEN__
+    if (!gladLoadGLLoader((GLADloadproc)emscripten_webgl_get_proc_address))
+    {
+        std::cout << "Failed to initialize GLAD\n";
+        return -1;
+    }
+    #else
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        std::cout << "Failed to initialize GLAD\n";
+        return -1;
+    }
+    #endif
+
+    // configure global opengl state
+    // -----------------------------
+    glEnable(GL_DEPTH_TEST);
+
+    //make shaderObject
+
+    #ifdef __EMSCRIPTEN__
+        ourShader.loadShaders("Emiscripten/vShader.vs", "Emiscripten/fShader.fs");
+    #else
+        ourShader.loadShaders("Shaders/vs2.vs", "Shaders/fs2.fs");
+    #endif
+    //define model objects;
+
+    // sphere.loadModel("horse.obj");
+        #ifdef __EMSCRIPTEN__
+        sphere.loadModel("Emiscripten/horse.obj");
+    #else
+        sphere.loadModel("horse.obj");
+    #endif
+    // model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 1.0f, 0.0f));
+    model  = glm::translate(model, glm::vec3(0.0f, -0.5f, 0.0f));
+    // view  = glm::lookAt(cameraPos, targetPos, cameraUp);
+    projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+    //camera stuffs
+    //glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+    // uncomment this call to draw in wireframe polygons.
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    // render loop
+    // -----------
+    #ifdef __EMSCRIPTEN__
+        emscripten_set_main_loop(mainLoop, 0, 1);
+    #else
+        while (!glfwWindowShouldClose(window))
+        {
+            mainLoop();
+        }
+    #endif
 
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
@@ -475,7 +499,7 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
         double dx = currMouseX - prevMouseX;
         double dy = currMouseY - prevMouseY;
 
-        std::cout << dx << " " << dy << "\n";
+        // std::cout << dx << " " << dy << "\n";
 
         glm::mat4 rot = glm::rotate(glm::mat4(1.0f), glm::radians((float)dx), glm::vec3(0.0f, 1.0f, 0.0f));
         rot = glm::rotate(rot, glm::radians((float)dy), glm::vec3(1.0f, 0.0f, 0.0f));
